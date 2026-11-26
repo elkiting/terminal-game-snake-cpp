@@ -1,190 +1,115 @@
-#include <ncurses.h>
-#include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
-#include <fstream> // Tambahkan ini untuk menyimpan & membaca file
 #include "menu.h"
 
-#define MAX_LEN 200
-#define HIGHSCORE_FILE "highscore.txt"
+#include <cstdio>
+#include <cstring>
+#include <ncurses.h>
 
-// Membaca high score dari file saat game baru dijalankan
-int loadHighScore() {
-    std::ifstream file(HIGHSCORE_FILE);
-    int score = 0;
-    if (file.is_open()) {
-        file >> score;
-        file.close();
-    }
-    return score;
-}
+namespace {
 
-// Menyimpan high score baru ke file
-void saveHighScore(int score) {
-    std::ofstream file(HIGHSCORE_FILE);
-    if (file.is_open()) {
-        file << score;
-        file.close();
-    }
-}
-
-int playGame(Difficulty difficulty) {
-    int w = 40, h = 15;
-    int x = 20, y = 7;
-
-    int ularX[MAX_LEN];
-    int ularY[MAX_LEN];
-    int panjangUlar = 1;
-    ularX[0] = x;
-    ularY[0] = y;
-
-    int arah = 0;
-    int skor = 0;
-    bool gameOver = false;
-    int tick = 0;
-
-    int delay = 100000;
-    if (difficulty == Difficulty::Easy) {
-        delay = 150000;
-    } else if (difficulty == Difficulty::Hard) {
-        delay = 60000;
-    }
-
-    int makanX = rand() % (w - 1) + 1;
-    int makanY = rand() % (h - 1) + 1;
-
-    nodelay(stdscr, TRUE);
-
-    while (!gameOver) {
-        int ch = getch();
-        if (ch == 'q' || ch == 'Q') break;
-
-        if (ch == KEY_UP && arah != 2) arah = 1;
-        if (ch == KEY_DOWN && arah != 1) arah = 2;
-        if (ch == KEY_LEFT && arah != 4) arah = 3;
-        if (ch == KEY_RIGHT && arah != 3) arah = 4;
-
-        bool bolehJalan = (arah == 3 || arah == 4) || ((arah == 1 || arah == 2) && (tick % 2 == 0));
-
-        if (arah != 0 && bolehJalan) {
-            int nextX = x;
-            int nextY = y;
-            if (arah == 1) nextY--;
-            if (arah == 2) nextY++;
-            if (arah == 3) nextX--;
-            if (arah == 4) nextX++;
-
-            if (nextX <= 0 || nextX >= w || nextY <= 0 || nextY >= h) {
-                gameOver = true;
-            }
-
-            if (!gameOver) {
-                for (int i = 0; i < panjangUlar; i++) {
-                    if (ularX[i] == nextX && ularY[i] == nextY) {
-                        gameOver = true;
-                        break;
-                    }
-                }
-            }
-            if (gameOver) break;
-
-            for (int i = panjangUlar - 1; i > 0; i--) {
-                ularX[i] = ularX[i - 1];
-                ularY[i] = ularY[i - 1];
-            }
-            x = nextX;
-            y = nextY;
-            ularX[0] = x;
-            ularY[0] = y;
-
-            if (x == makanX && y == makanY) {
-                skor += 10;
-                if (panjangUlar < MAX_LEN) {
-                    panjangUlar++;
-                }
-
-                bool posisiValid;
-                do {
-                    makanX = rand() % (w - 1) + 1;
-                    makanY = rand() % (h - 1) + 1;
-                    posisiValid = true;
-
-                    for (int i = 0; i < panjangUlar; i++) {
-                        if (ularX[i] == makanX && ularY[i] == makanY) {
-                            posisiValid = false;
-                            break;
-                        }
-                    }
-                } while (!posisiValid);
-            }
-        }
-        clear();
-
-        for (int i = 0; i <= w; i++) {
-            mvprintw(0, i, "#");
-            mvprintw(h, i, "#");
-        }
-        for (int i = 0; i <= h; i++) {
-            mvprintw(i, 0, "#");
-            mvprintw(i, w, "#");
-        }
-
-        mvprintw(makanY, makanX, "*");
-        mvprintw(ularY[0], ularX[0], "O");
-        for (int i = 1; i < panjangUlar; i++) {
-            mvprintw(ularY[i], ularX[i], "o");
-        }
-
-        mvprintw(h + 1, 0, "Skor: %d  |  Level: %s  |  'Q' keluar", skor, difficultyName(difficulty));
-        refresh();
-
-        tick++;
-        usleep(delay);
-    }
-
-    nodelay(stdscr, FALSE);
+void drawMenu(const char* title, const char* const options[], int optionCount, int selected,
+              const char* footer) {
+    int height;
+    int width;
+    getmaxyx(stdscr, height, width);
     clear();
-    mvprintw(h / 2 - 1, (w / 2) - 5, "GAME OVER!");
-    mvprintw(h / 2,     (w / 2) - 7, "Skor Akhir: %d", skor);
-    mvprintw(h / 2 + 2, (w / 2) - 13, "Tekan tombol apa saja...");
+
+    const int titleY = height / 2 - optionCount - 4;
+    mvprintw(titleY, (width - static_cast<int>(strlen(title))) / 2, "%s", title);
+    for (int i = 0; i < optionCount; ++i) {
+        const int y = titleY + 3 + i;
+        if (i == selected) {
+            attron(A_REVERSE);
+        }
+        mvprintw(y, (width - static_cast<int>(strlen(options[i]))) / 2, "%s", options[i]);
+        if (i == selected) {
+            attroff(A_REVERSE);
+        }
+    }
+    if (footer != nullptr) {
+        mvprintw(height - 2, (width - static_cast<int>(strlen(footer))) / 2, "%s", footer);
+    }
+    refresh();
+}
+
+int selectOption(const char* title, const char* const options[], int optionCount, int initialSelection,
+                 const char* footer) {
+    int selected = initialSelection;
+    while (true) {
+        drawMenu(title, options, optionCount, selected, footer);
+        const int key = getch();
+        if (key == KEY_UP) {
+            selected = (selected + optionCount - 1) % optionCount;
+        } else if (key == KEY_DOWN) {
+            selected = (selected + 1) % optionCount;
+        } else if (key == '\n' || key == KEY_ENTER || key == '\r') {
+            return selected;
+        } else if (key == 27) {
+            return -1;
+        }
+    }
+}
+
+} // namespace
+
+MenuAction showMainMenu(int highScore) {
+    const char* options[] = {"Mulai", "High Score", "Keluar"};
+    char scoreLine[64];
+    snprintf(scoreLine, sizeof(scoreLine), "High Score: %d", highScore);
+    const int selected = selectOption("SNAKE", options, 3, 0, scoreLine);
+    if (selected == -1) {
+        return MenuAction::Quit;
+    }
+    if (selected == 1) {
+        return MenuAction::HighScore;
+    }
+    if (selected == 2) {
+        return MenuAction::Quit;
+    }
+    return MenuAction::Start;
+}
+
+Difficulty chooseDifficulty() {
+    const char* options[] = {"Easy", "Normal", "Hard"};
+    const int selected = selectOption("PILIH LEVEL", options, 3, 0, "Enter: pilih  |  Esc: kembali");
+    if (selected == 0) {
+        return Difficulty::Easy;
+    }
+    if (selected == 1) {
+        return Difficulty::Normal;
+    }
+    if (selected == 2) {
+        return Difficulty::Hard;
+    }
+    return Difficulty::Back;
+}
+
+void showHighScore(int highScore) {
+    clear();
+    int height;
+    int width;
+    getmaxyx(stdscr, height, width);
+
+    const char* title = "HIGH SCORE";
+    mvprintw(height / 2 - 2, (width - static_cast<int>(strlen(title))) / 2, "%s", title);
+    char scoreLine[64];
+    snprintf(scoreLine, sizeof(scoreLine), "Skor tertinggi: %d", highScore);
+    mvprintw(height / 2, (width - static_cast<int>(strlen(scoreLine))) / 2, "%s", scoreLine);
+    const char* prompt = "Tekan tombol apa saja untuk kembali";
+    mvprintw(height / 2 + 2, (width - static_cast<int>(strlen(prompt))) / 2, "%s", prompt);
     refresh();
     getch();
-
-    return skor;
 }
 
-int main() {
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(FALSE);
-    srand(time(NULL));
-
-    // Ambil high score terakhir yang tersimpan di file
-    int highScore = loadHighScore();
-    bool running = true;
-
-    while (running) {
-        nodelay(stdscr, FALSE);
-        MenuAction action = showMainMenu(highScore);
-
-        if (action == MenuAction::Start) {
-            Difficulty level = chooseDifficulty();
-            if (level != Difficulty::Back) {
-                int lastScore = playGame(level);
-                if (lastScore > highScore) {
-                    highScore = lastScore;
-                    saveHighScore(highScore); // Simpan rekor baru ke file!
-                }
-            }
-        } else if (action == MenuAction::HighScore) {
-            showHighScore(highScore);
-        } else if (action == MenuAction::Quit) {
-            running = false;
-        }
+const char* difficultyName(Difficulty difficulty) {
+    switch (difficulty) {
+    case Difficulty::Easy:
+        return "Easy";
+    case Difficulty::Normal:
+        return "Normal";
+    case Difficulty::Hard:
+        return "Hard";
+    case Difficulty::Back:
+        return "";
     }
-
-    endwin();
-    return 0;
+    return "";
 }
