@@ -2,18 +2,35 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <fstream> // Tambahkan ini untuk menyimpan & membaca file
+#include "menu.h"
+
 #define MAX_LEN 200
+#define HIGHSCORE_FILE "highscore.txt"
 
-int main() {
-    initscr();
-    noecho();
-    keypad(stdscr, TRUE);
-    curs_set(FALSE);
-    nodelay(stdscr, TRUE); 
-    srand(time(NULL)); 
+// Membaca high score dari file saat game baru dijalankan
+int loadHighScore() {
+    std::ifstream file(HIGHSCORE_FILE);
+    int score = 0;
+    if (file.is_open()) {
+        file >> score;
+        file.close();
+    }
+    return score;
+}
 
+// Menyimpan high score baru ke file
+void saveHighScore(int score) {
+    std::ofstream file(HIGHSCORE_FILE);
+    if (file.is_open()) {
+        file << score;
+        file.close();
+    }
+}
+
+int playGame(Difficulty difficulty) {
     int w = 40, h = 15;
-    int x = 20, y = 7; 
+    int x = 20, y = 7;
 
     int ularX[MAX_LEN];
     int ularY[MAX_LEN];
@@ -26,12 +43,21 @@ int main() {
     bool gameOver = false;
     int tick = 0;
 
+    int delay = 100000;
+    if (difficulty == Difficulty::Easy) {
+        delay = 150000;
+    } else if (difficulty == Difficulty::Hard) {
+        delay = 60000;
+    }
+
     int makanX = rand() % (w - 1) + 1;
     int makanY = rand() % (h - 1) + 1;
 
+    nodelay(stdscr, TRUE);
+
     while (!gameOver) {
         int ch = getch();
-        if (ch == 'q') break;
+        if (ch == 'q' || ch == 'Q') break;
 
         if (ch == KEY_UP && arah != 2) arah = 1;
         if (ch == KEY_DOWN && arah != 1) arah = 2;
@@ -109,11 +135,11 @@ int main() {
             mvprintw(ularY[i], ularX[i], "o");
         }
 
-        mvprintw(h + 1, 0, "Skor: %d  |  Tekan 'Q' untuk keluar", skor);
+        mvprintw(h + 1, 0, "Skor: %d  |  Level: %s  |  'Q' keluar", skor, difficultyName(difficulty));
         refresh();
 
         tick++;
-        usleep(100000);
+        usleep(delay);
     }
 
     nodelay(stdscr, FALSE);
@@ -123,6 +149,41 @@ int main() {
     mvprintw(h / 2 + 2, (w / 2) - 13, "Tekan tombol apa saja...");
     refresh();
     getch();
+
+    return skor;
+}
+
+int main() {
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    curs_set(FALSE);
+    srand(time(NULL));
+
+    // Ambil high score terakhir yang tersimpan di file
+    int highScore = loadHighScore();
+    bool running = true;
+
+    while (running) {
+        nodelay(stdscr, FALSE);
+        MenuAction action = showMainMenu(highScore);
+
+        if (action == MenuAction::Start) {
+            Difficulty level = chooseDifficulty();
+            if (level != Difficulty::Back) {
+                int lastScore = playGame(level);
+                if (lastScore > highScore) {
+                    highScore = lastScore;
+                    saveHighScore(highScore); // Simpan rekor baru ke file!
+                }
+            }
+        } else if (action == MenuAction::HighScore) {
+            showHighScore(highScore);
+        } else if (action == MenuAction::Quit) {
+            running = false;
+        }
+    }
 
     endwin();
     return 0;
